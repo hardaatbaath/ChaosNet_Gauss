@@ -4,12 +4,10 @@ from .chaos_sampler import ChaosSampler
 
 class FeatureExtractor:
     @staticmethod
-    @nb.vectorize([nb.boolean(nb.float64, nb.float64, nb.float64)])
     def _compare(value1, value2, value3):
         return abs(value1 - value2) < value3
 
     @staticmethod
-    @nb.njit
     def _compute_match_idx(value, array, epsilon):
         for idx in range(len(array)):
             if FeatureExtractor._compare(value, array[idx], epsilon):
@@ -17,19 +15,23 @@ class FeatureExtractor:
         return len(array)
 
     @staticmethod
-    @nb.njit
     def _compute_energy(path):
         return path @ path
 
     @staticmethod
-    @nb.njit
     def _compute_ttss_entropy(path, threshold):
-        prob = np.count_nonzero(path > threshold) / len(path)
+        """
+        Adjust this function to use the threshold array. We assume the first threshold element
+        is used, but this can be customized to use multiple thresholds if needed.
+        """
+        prob = np.count_nonzero(path > threshold[0]) / len(path)
         return np.array([prob, -prob * np.log2(prob) - (1 - prob) * np.log2(1 - prob)])
 
     @staticmethod
-    @nb.njit(parallel=True)
     def _compute_measures(feat_mat, trajectory, epsilon, threshold, meas_mat):
+        """
+        Update this function to accept the threshold array and pass it correctly during processing.
+        """
         for i in nb.prange(feat_mat.shape[0]):
             for j in nb.prange(feat_mat.shape[1]):
                 idx = FeatureExtractor._compute_match_idx(feat_mat[i, j], trajectory, epsilon)
@@ -44,8 +46,11 @@ class FeatureExtractor:
 
     @staticmethod
     def transform(feat_mat, initial_cond, trajectory_len, epsilon, threshold):
+        """
+        Modify this function to take a threshold array instead of a single value.
+        """
         from .validate import validate
-        if not validate(feat_mat, initial_cond, trajectory_len, epsilon, threshold):
+        if not validate(feat_mat, initial_cond, trajectory_len, epsilon, float(threshold[0])):  # Validate only first threshold element for simplicity
             return None
 
         dimx, dimy = feat_mat.shape
@@ -59,7 +64,7 @@ class FeatureExtractor:
     @staticmethod
     def warmup():
         feat_mat = np.array([[0.1, 0.2], [0.3, 0.4]])
-        out = FeatureExtractor.transform(feat_mat, initial_cond=0.1, trajectory_len=100, epsilon=0.01, threshold=0.2)
+        out = FeatureExtractor.transform(feat_mat, initial_cond=0.1, trajectory_len=100, epsilon=0.01, threshold=[0.2])
         if out.shape == (2, 8) and out[0, 5] == 12:
             print("> Numba JIT warmup successful for transform ...")
         else:

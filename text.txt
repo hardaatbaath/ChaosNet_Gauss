@@ -843,6 +843,7 @@ def validate(feat_mat, initial_cond, trajectory_len, epsilon, threshold):
 
 
 This is the above original code that I want to follow, below is my code, that you have to complete:
+
 train.py:
 import argparse
 import torch
@@ -863,12 +864,17 @@ def train_chaosnet(X_train, y_train, num_folds=5, num_epochs=100, learning_rate=
         X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
         y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
 
-        model = ChaosNetModel(num_features=X_train.shape[1])
+        model = ChaosNetModel(num_features=X_train.shape[1], num_threshold = 2)
         optimizer = Adam(model.parameters(), lr=learning_rate)
-        # Define the loss function
-        criterion = torch.CrossEntropyLoss()
+        criterion = torch.nn.CrossEntropyLoss()
+
+        X_train_fold = torch.from_numpy(X_train_fold).float()
+        y_train_fold = torch.from_numpy(y_train_fold).long()
+        X_val_fold = torch.from_numpy(X_val_fold).float()
+        y_val_fold = torch.from_numpy(y_val_fold).long()
 
         for epoch in range(num_epochs):
+            model.train()
             optimizer.zero_grad()
 
             pred = model(X_train_fold)
@@ -880,10 +886,11 @@ def train_chaosnet(X_train, y_train, num_folds=5, num_epochs=100, learning_rate=
             if (epoch + 1) % 10 == 0:
                 print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss.item()}")
 
-        # Evaluate on validation set
+        model.eval()
         with torch.no_grad():
-            val_loss = model.compute_loss(X_val_fold, y_val_fold)
-            val_score = -val_loss.item()  # Convert back to accuracy
+            val_pred = model(X_val_fold)
+            val_loss = criterion(val_pred, y_val_fold)
+            val_score = (val_pred.argmax(dim=1) == y_val_fold).float().mean().item()
 
         print(f"Validation Score: {val_score}")
 
@@ -913,22 +920,22 @@ if __name__ == "__main__":
 
 test.py:
 import numpy as np
-from ChaosNet import feature_extractor as CFX
+import torch
+from ChaosNet.model import ChaosNetModel
 from utils import load_data, load_parameters
 
 def test_chaosnet(X_test, y_test, params):
-    # Unpack parameters
-    equation_params, initial_cond, epsilon = params[:-2], params[-2], params[-1]
+    model = ChaosNetModel(num_features=X_test.shape[1])
+    model.load_state_dict(params)
+    model.eval()
 
-    # Extract features using ChaosNet
-    features = CFX.transform(X_test, initial_cond, 10000, epsilon, equation_params)
+    X_test = torch.from_numpy(X_test).float()
+    y_test = torch.from_numpy(y_test).long()
 
-    # Simple classifier (e.g., nearest centroid)
-    centroids = np.array([features[y_test == c].mean(axis=0) for c in np.unique(y_test)])
-    y_pred = np.argmin(np.linalg.norm(features[:, None] - centroids, axis=2), axis=1)
+    with torch.no_grad():
+        y_pred = model(X_test).argmax(dim=1)
 
-    # Calculate accuracy
-    accuracy = np.mean(y_pred == y_test)
+    accuracy = (y_pred == y_test).float().mean().item()
     return accuracy
 
 if __name__ == "__main__":
@@ -936,7 +943,7 @@ if __name__ == "__main__":
     X_test, y_test = load_data("test_data.csv")
 
     # Load parameters
-    params = load_parameters("chaosnet_params.npy")
+    params = load_parameters("chaosnet_params.pth")
 
     # Test ChaosNet
     accuracy = test_chaosnet(X_test, y_test, params)
@@ -947,20 +954,21 @@ utils.py:
 import numpy as np
 import pandas as pd
 import os
+import torch
 
 def load_data(directory):
     X_train = pd.read_csv(os.path.join(directory, 'X_train.csv')).values
-    y_train = pd.read_csv(os.path.join(directory, 'y_train.csv')).values
+    y_train = pd.read_csv(os.path.join(directory, 'y_train.csv')).values.ravel()
     X_test = pd.read_csv(os.path.join(directory, 'X_test.csv')).values
-    y_test = pd.read_csv(os.path.join(directory, 'y_test.csv')).values
+    y_test = pd.read_csv(os.path.join(directory, 'y_test.csv')).values.ravel()
 
     return X_train, y_train, X_test, y_test
 
 def save_parameters(params, filename):
-    np.save(filename, params)
+    torch.save(params, filename)
 
 def load_parameters(filename):
-    return np.load(filename)
+    return torch.load(filename)
 
 and in the folder ChaosNet, I have the following:
 __init__.py:
@@ -972,138 +980,144 @@ from .validate import validate_inputs
 chaos_sampler.py:
 import numpy as np
 from numba import vectorize, float64, njit
-import torch
-import torch.nn as nn
 
-class ChaosSampler(nn.Module):
-    def __init__(self):
-        super(ChaosSampler, self).__init__()
-
+class ChaosSampler:
+    @staticmethod
     @vectorize([float64(float64, float64)])
-    def _chaotic_map_step(value, *params):
-        # Implement your chaotic map here
-        # This is a placeholder implementation
-        return params[0] * value * (1 - value)
+    def _skewtent_onestep(value, threshold):
+        if value < threshold:
+            return value / threshold[0]
+        return (1 - value) / (1 - threshold[0])
 
+    @staticmethod
     @njit
-    def _iterate_chaotic_map(params, traj_vec):
+    def _iterate_skewtent(threshold, traj_vec):
         for idx in range(1, len(traj_vec)):
-            traj_vec[idx] = _chaotic_map_step(traj_vec[idx - 1], *params)
+            traj_vec[idx] = ChaosSampler._skewtent_onestep(traj_vec[idx - 1], threshold)
         return traj_vec
 
+    @staticmethod
     @njit
-    def _compute_trajectory(init_cond, params, length):
+    def _compute_trajectory(init_cond, threshold, length):
         traj_vec = np.zeros(length, dtype=np.float64)
         traj_vec[0] = init_cond
-        return _iterate_chaotic_map(params, traj_vec)
+        return ChaosSampler._iterate_skewtent(threshold, traj_vec)
 
-    def compute_trajectory(init_cond, params, length, validate=False):
-        # Validation can be implemented here if needed
-        return _compute_trajectory(init_cond, params, length)
+    @staticmethod
+    def compute_trajectory(init_cond, threshold, length, validate=False):
+        if validate:
+            from .validate import _check_trajectory_inputs
+            if not _check_trajectory_inputs(init_cond, threshold, length):
+                return None
+        return ChaosSampler._compute_trajectory(init_cond, threshold, length)
 
+    @staticmethod
     def warmup():
-        test_params = np.array([3.8])  # Example parameter for logistic map
-        if _compute_trajectory(0.1, test_params, 3)[-1] == np.array([0.4332]):
+        if ChaosSampler._compute_trajectory(0.1, 0.2, 3)[-1] == np.array([0.625]):
             print("> Numba JIT warmup successful for chaotic_sampler ...")
         else:
             print("> Numba JIT warmup failed for chaotic_sampler ...")
 
-warmup()
-
+ChaosSampler.warmup()
 
 feature_extractor.py:
 import numpy as np
 import numba as nb
-import torch
-import torch.nn as nn
-from .chaos_sampler import compute_trajectory
+from .chaos_sampler import ChaosSampler
 
-class FeatureExtractor(nn.Module):
-    def __init__(self):
-        super(FeatureExtractor, self).__init__()
-
+class FeatureExtractor:
+    @staticmethod
     @nb.vectorize([nb.boolean(nb.float64, nb.float64, nb.float64)])
     def _compare(value1, value2, value3):
         return abs(value1 - value2) < value3
 
+    @staticmethod
     @nb.njit
     def _compute_match_idx(value, array, epsilon):
-        length = len(array)
-        for idx in range(length):
-            if _compare(value, array[idx], epsilon):
+        for idx in range(len(array)):
+            if FeatureExtractor._compare(value, array[idx], epsilon):
                 return idx
-        return length
+        return len(array)
 
+    @staticmethod
     @nb.njit
     def _compute_energy(path):
         return path @ path
 
+    @staticmethod
     @nb.njit
     def _compute_ttss_entropy(path, threshold):
         prob = np.count_nonzero(path > threshold) / len(path)
         return np.array([prob, -prob * np.log2(prob) - (1 - prob) * np.log2(1 - prob)])
 
+    @staticmethod
     @nb.njit(parallel=True)
     def _compute_measures(feat_mat, trajectory, epsilon, threshold, meas_mat):
         for i in nb.prange(feat_mat.shape[0]):
             for j in nb.prange(feat_mat.shape[1]):
-                idx = _compute_match_idx(feat_mat[i, j], trajectory, epsilon)
+                idx = FeatureExtractor._compute_match_idx(feat_mat[i, j], trajectory, epsilon)
                 meas_mat[i, j, 2] = idx
                 if idx != 0:
                     path = trajectory[:idx]
-                    meas_mat[i, j, 1] = _compute_energy(path)
-                    ttss_entropy = _compute_ttss_entropy(path, threshold)
+                    meas_mat[i, j, 1] = FeatureExtractor._compute_energy(path)
+                    ttss_entropy = FeatureExtractor._compute_ttss_entropy(path, threshold)
                     meas_mat[i, j, 0] = ttss_entropy[0]
                     meas_mat[i, j, 3] = ttss_entropy[1]
         return meas_mat
 
-    def transform(feat_mat, initial_cond, trajectory_len, epsilon, params):
+    @staticmethod
+    def transform(feat_mat, initial_cond, trajectory_len, epsilon, threshold):
+        from .validate import validate
+        if not validate(feat_mat, initial_cond, trajectory_len, epsilon, threshold):
+            return None
+
         dimx, dimy = feat_mat.shape
         meas_mat = np.zeros([dimx, dimy, 4])
-        trajectory = compute_trajectory(initial_cond, params, trajectory_len)
-        threshold = params[0]  # Assuming first parameter is threshold
-        out = _compute_measures(feat_mat, trajectory, epsilon, threshold, meas_mat)
+        trajectory = ChaosSampler.compute_trajectory(initial_cond, threshold, trajectory_len)
+        out = FeatureExtractor._compute_measures(feat_mat, trajectory, epsilon, threshold, meas_mat)
         out[:, :, 3] = np.nan_to_num(out[:, :, 3])
         out = out.transpose([0, 2, 1]).reshape([dimx, dimy * 4])
         return out
 
+    @staticmethod
     def warmup():
         feat_mat = np.array([[0.1, 0.2], [0.3, 0.4]])
-        out = transform(feat_mat, initial_cond=0.1, trajectory_len=100, epsilon=0.01, params=np.array([0.2]))
+        out = FeatureExtractor.transform(feat_mat, initial_cond=0.1, trajectory_len=100, epsilon=0.01, threshold=0.2)
         if out.shape == (2, 8) and out[0, 5] == 12:
             print("> Numba JIT warmup successful for transform ...")
         else:
             print("> Numba JIT warmup failed for transform ...")
 
-warmup()
-
+FeatureExtractor.warmup()
 
 model.py:
 import torch
 import torch.nn as nn
 from .feature_extractor import FeatureExtractor
-from .chaos_sampler import ChaosSampler
 
 class ChaosNetModel(nn.Module):
-    def __init__(self, num_features):
+    def __init__(self, num_features, num_threshold):
         super(ChaosNetModel, self).__init__()
-        self.chaos_sampler = ChaosSampler()
-        self.feature_extractor = FeatureExtractor()
+        self.num_features = num_features
+        self.initial_cond = nn.Parameter(torch.rand(1))
+        self.threshold = nn.Parameter(torch.rand(num_threshold))
+        self.epsilon = nn.Parameter(torch.rand(1))
+        self.trajectory_len = 10000
         self.classifier = nn.Linear(num_features * 4, 2)  # Binary classification
 
-        # Learnable parameters
-        self.initial_cond = nn.Parameter(torch.rand(1))
-        self.threshold = nn.Parameter(torch.rand(1))
-        self.epsilon = nn.Parameter(torch.rand(1))
-
     def forward(self, x):
-        trajectory = self.chaos_sampler(self.initial_cond, self.threshold, 10000)
-        features = self.feature_extractor(x, trajectory, self.epsilon, self.threshold)
+        features = self.extract_features(x)
         return self.classifier(features)
 
     def extract_features(self, x):
-        trajectory = self.chaos_sampler(self.initial_cond, self.threshold, 10000)
-        return self.feature_extractor(x, trajectory, self.epsilon, self.threshold)
+        features = FeatureExtractor.transform(
+            x.numpy(),
+            self.initial_cond.item(),
+            self.trajectory_len,
+            self.epsilon.item(),
+            self.threshold.item()
+        )
+        return torch.from_numpy(features).float()
 
     def classify(self, features):
         return torch.argmax(self.classifier(features), dim=1)
@@ -1113,37 +1127,38 @@ class ChaosNetModel(nn.Module):
         return nn.functional.cross_entropy(outputs, y)
 
 validate.py:
-import torch
+import numpy as np
 
-def validate_inputs(feat_mat, initial_cond, trajectory_len, epsilon, threshold):
-    if not _check_features(feat_mat):
-        return False
-    if not _check_trajectory_inputs(initial_cond, threshold, trajectory_len):
-        return False
-    if not _check_epsilon(epsilon):
-        return False
-    return True
+def validate(feat_mat, initial_cond, trajectory_len, epsilon, threshold):
+    return (_check_features(feat_mat) and
+            _check_trajectory_inputs(initial_cond, threshold, trajectory_len) and
+            _check_epsilon(epsilon))
 
 def _check_features(feat_mat):
-    if not isinstance(feat_mat, torch.Tensor) or feat_mat.dim() != 2:
-        print("> ERROR: feat_mat should be a 2D torch.Tensor ...")
+    if not (isinstance(feat_mat, np.ndarray) and
+            feat_mat.dtype == np.float64 and
+            feat_mat.ndim == 2):
+        print("> ERROR: feat_mat should be 2D array of dtype float64 ...")
         return False
     if feat_mat.min() < 0 or feat_mat.max() > 1:
         print("> ERROR: feat_mat should be scaled between 0 & 1 ...")
         return False
     return True
 
-def _check_trajectory_inputs(initial_cond, threshold, trajectory_len):
-    if not (0 <= initial_cond <= 1 and 0 <= threshold <= 1):
-        print("> ERROR: initial_condition & threshold should be between 0 and 1 ...")
+def _check_trajectory_inputs(init_cond, threshold, trajectory_len):
+    if not (isinstance(init_cond, float) and isinstance(threshold, float)):
+        print("> ERROR: init_cond & threshold should be of type float ...")
         return False
-    if not (100 <= trajectory_len <= int(1e7)):
-        print("> ERROR: trajectory_len should be an integer between 10^2 & 10^7 ...")
+    if not (0 <= init_cond <= 1 and 0 <= threshold <= 1):
+        print("> ERROR: init_condition & threshold cannot be <=0 or >=1 ...")
+        return False
+    if not (100 <= trajectory_len <= int(1e7) and isinstance(trajectory_len, int)):
+        print("> ERROR: length should be an integer between 10^2 & 10^7 ...")
         return False
     return True
 
 def _check_epsilon(epsilon):
-    if not (1e-5 <= epsilon <= 1.0):
-        print("> ERROR: epsilon must be between 0.5 and 10^-5")
+    if not (isinstance(epsilon, float) and 1e-5 <= epsilon <= 1.0):
+        print("> ERROR: epsilon must be a float between 0.5 and 10^-5")
         return False
     return True

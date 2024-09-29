@@ -17,7 +17,8 @@ def train_chaosnet(X_train, y_train, num_folds=5, num_epochs=100, learning_rate=
         X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
         y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
 
-        model = ChaosNetModel(num_features=X_train.shape[1])
+        # Initialize ChaosNetModel with flexible number of thresholds
+        model = ChaosNetModel(num_features=X_train.shape[1], num_threshold=2)
         optimizer = Adam(model.parameters(), lr=learning_rate)
         criterion = torch.nn.CrossEntropyLoss()
 
@@ -55,7 +56,7 @@ def train_chaosnet(X_train, y_train, num_folds=5, num_epochs=100, learning_rate=
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a ChaosNet model with k-fold cross-validation.")
-    parser.add_argument('--data_path', type=str, default="/Data", help='Path to the training data directory')
+    parser.add_argument('--data_path', type=str, default="Data", help='Path to the training data directory')
     parser.add_argument('--num_folds', type=int, default=5, help='Number of folds for cross-validation')
     parser.add_argument('--num_epochs', type=int, default=100, help='Number of training epochs per fold')
     parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate for the optimizer')
@@ -67,6 +68,7 @@ if __name__ == "__main__":
     optimal_params = train_chaosnet(X_train, y_train, num_folds=args.num_folds,
                                     num_epochs=args.num_epochs, learning_rate=args.learning_rate)
 
+    print(optimal_params)
     save_parameters(optimal_params, "chaosnet_params.pth")
 
     print("Training completed. Optimal parameters saved.")

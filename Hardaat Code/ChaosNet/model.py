@@ -3,11 +3,11 @@ import torch.nn as nn
 from .feature_extractor import FeatureExtractor
 
 class ChaosNetModel(nn.Module):
-    def __init__(self, num_features):
+    def __init__(self, num_features, num_threshold):
         super(ChaosNetModel, self).__init__()
         self.num_features = num_features
         self.initial_cond = nn.Parameter(torch.rand(1))
-        self.threshold = nn.Parameter(torch.rand(1))
+        self.threshold = nn.Parameter(torch.rand(num_threshold))  # Modified to allow a threshold array
         self.epsilon = nn.Parameter(torch.rand(1))
         self.trajectory_len = 10000
         self.classifier = nn.Linear(num_features * 4, 2)  # Binary classification
@@ -22,7 +22,7 @@ class ChaosNetModel(nn.Module):
             self.initial_cond.item(),
             self.trajectory_len,
             self.epsilon.item(),
-            self.threshold.item()
+            self.threshold.detach().numpy()  # Use the threshold array in feature extraction
         )
         return torch.from_numpy(features).float()
 
