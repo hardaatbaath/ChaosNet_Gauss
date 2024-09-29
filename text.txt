@@ -1,4 +1,7 @@
 
+main_plot.py:
+
+
 import matplotlib.pyplot as plt
 import numpy as np
 from load_data import get_data
@@ -28,8 +31,9 @@ plt.ylim(0, 1)
 plt.tight_layout()
 plt.savefig(RESULT_PATH+"/Chaosnet-"+DATA_NAME+"-SR_plot.jpg", format='jpg', dpi=200)
 plt.show()
-    
 
+
+Codes.py:
 # -*- coding: utf-8 -*-
 """
 Author: Harikrishnan NB
@@ -51,7 +55,7 @@ import ChaosFEX.feature_extractor as CFX
 
 def chaosnet(traindata, trainlabel, testdata):
     '''
-    
+
 
     Parameters
     ----------
@@ -74,11 +78,11 @@ def chaosnet(traindata, trainlabel, testdata):
     NUM_FEATURES = traindata.shape[1]
     NUM_CLASSES = len(np.unique(trainlabel))
     mean_each_class = np.zeros((NUM_CLASSES, NUM_FEATURES))
-    
+
     for label in range(0, NUM_CLASSES):
-        
+
         mean_each_class[label, :] = np.mean(traindata[(trainlabel == label)[:,0], :], axis=0)
-        
+
     predicted_label = np.argmax(cosine_similarity(testdata, mean_each_class), axis = 1)
 
     return mean_each_class, predicted_label
@@ -122,10 +126,10 @@ def k_cross_validation(FOLD_NO, traindata, trainlabel, testdata, testlabel, INIT
     EPS = np.zeros((len(DISCRIMINATION_THRESHOLD), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
 
 
-    KF = KFold(n_splits= FOLD_NO, random_state=42, shuffle=True) # Define the split - into 2 folds 
+    KF = KFold(n_splits= FOLD_NO, random_state=42, shuffle=True) # Define the split - into 2 folds
     KF.get_n_splits(traindata) # returns the number of splitting iterations in the cross-validator
-    print(KF) 
-    
+    print(KF)
+
     ROW = -1
     COL = -1
     WIDTH = -1
@@ -138,64 +142,64 @@ def k_cross_validation(FOLD_NO, traindata, trainlabel, testdata, testlabel, INIT
             WIDTH = -1
             for EPSILON_1 in EPSILON:
                 WIDTH = WIDTH + 1
-                
+
                 ACC_TEMP =[]
                 FSCORE_TEMP=[]
-            
+
                 for TRAIN_INDEX, VAL_INDEX in KF.split(traindata):
-                    
+
                     X_TRAIN, X_VAL = traindata[TRAIN_INDEX], traindata[VAL_INDEX]
                     Y_TRAIN, Y_VAL = trainlabel[TRAIN_INDEX], trainlabel[VAL_INDEX]
-        
+
 
                     # Extract features
                     FEATURE_MATRIX_TRAIN = CFX.transform(X_TRAIN, INA, 10000, EPSILON_1, DT)
-                    FEATURE_MATRIX_VAL = CFX.transform(X_VAL, INA, 10000, EPSILON_1, DT)            
-                
-                   
+                    FEATURE_MATRIX_VAL = CFX.transform(X_VAL, INA, 10000, EPSILON_1, DT)
+
+
                     mean_each_class, Y_PRED = chaosnet(FEATURE_MATRIX_TRAIN,Y_TRAIN, FEATURE_MATRIX_VAL)
-                    
+
                     ACC = accuracy_score(Y_VAL, Y_PRED)*100
                     RECALL = recall_score(Y_VAL, Y_PRED , average="macro")
                     PRECISION = precision_score(Y_VAL, Y_PRED , average="macro")
                     F1SCORE = f1_score(Y_VAL, Y_PRED, average="macro")
-                                 
-                    
+
+
                     ACC_TEMP.append(ACC)
                     FSCORE_TEMP.append(F1SCORE)
                 Q[ROW, COL, WIDTH ] = INA # Initial Neural Activity
                 B[ROW, COL, WIDTH ] = DT # Discrimination Threshold
-                EPS[ROW, COL, WIDTH ] = EPSILON_1 
+                EPS[ROW, COL, WIDTH ] = EPSILON_1
                 ACCURACY[ROW, COL, WIDTH ] = np.mean(ACC_TEMP)
                 FSCORE[ROW, COL, WIDTH ] = np.mean(FSCORE_TEMP)
                 print("Mean F1-Score for Q = ", Q[ROW, COL, WIDTH ],"B = ", B[ROW, COL, WIDTH ],"EPSILON = ", EPS[ROW, COL, WIDTH ]," is  = ",  np.mean(FSCORE_TEMP)  )
-    
+
     print("Saving Hyperparameter Tuning Results")
-    
-    
+
+
     PATH = os.getcwd()
     RESULT_PATH = PATH + '/SR-PLOTS/'  + DATA_NAME + '/NEUROCHAOS-RESULTS/'
-    
-    
+
+
     try:
         os.makedirs(RESULT_PATH)
     except OSError:
         print ("Creation of the result directory %s failed" % RESULT_PATH)
     else:
         print ("Successfully created the result directory %s" % RESULT_PATH)
-    
-    np.save(RESULT_PATH+"/h_fscore.npy", FSCORE )    
-    np.save(RESULT_PATH+"/h_accuracy.npy", ACCURACY ) 
-    np.save(RESULT_PATH+"/h_Q.npy", Q ) 
+
+    np.save(RESULT_PATH+"/h_fscore.npy", FSCORE )
+    np.save(RESULT_PATH+"/h_accuracy.npy", ACCURACY )
+    np.save(RESULT_PATH+"/h_Q.npy", Q )
     np.save(RESULT_PATH+"/h_B.npy", B )
-    np.save(RESULT_PATH+"/h_EPS.npy", EPS )               
-    
-    
+    np.save(RESULT_PATH+"/h_EPS.npy", EPS )
+
+
     MAX_FSCORE = np.max(FSCORE)
     Q_MAX = []
     B_MAX = []
     EPSILON_MAX = []
-    
+
     for ROW in range(0, len(DISCRIMINATION_THRESHOLD)):
         for COL in range(0, len(INITIAL_NEURAL_ACTIVITY)):
             for WID in range(0, len(EPSILON)):
@@ -203,15 +207,189 @@ def k_cross_validation(FOLD_NO, traindata, trainlabel, testdata, testlabel, INIT
                     Q_MAX.append(Q[ROW, COL, WID])
                     B_MAX.append(B[ROW, COL, WID])
                     EPSILON_MAX.append(EPS[ROW, COL, WID])
-    
+
+    print("F1SCORE", FSCORE)
     print("BEST F1SCORE", MAX_FSCORE)
     print("BEST INITIAL NEURAL ACTIVITY = ", Q_MAX)
     print("BEST DISCRIMINATION THRESHOLD = ", B_MAX)
     print("BEST EPSILON = ", EPSILON_MAX)
     return FSCORE, Q, B, EPS, EPSILON
-    
 
 
+In ChaosFEX:
+chaotic_sampler.py:
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+This module contains functions for computing trajectory along the skew-tent map.
+
+compute_trajectory() is the main function that wraps around smaller modular
+functions composed specifically for performance optimizations by Numba's JIT
+
+Dependencies: numpy, numba
+
+@author: Dr. Pranay S. Yadav
+"""
+
+
+# Import calls
+import numpy as np
+from numba import vectorize, float64, njit
+from ChaosFEX.input_validator import _check_trajectory_inputs
+
+# Compute single step of iteration through skew-tent map
+@vectorize([float64(float64, float64)])
+def _skewtent_onestep(value, threshold):
+    """
+    Computes a single step of iteration through the skew-tent map given an
+    input (previous) value and a threshold. Returns the next value as output.
+    This function is called by _iterate_skewtent for iterating repeatedly.
+
+    Parameters
+    ----------
+    value : scalar, float64
+        Input value to the skew-tent map.
+    threshold : scalar, float64
+        Threshold value of the skew-tent map.
+
+    Returns
+    -------
+    Output value as float64 from the skew-tent map.
+    Computed conditionally as follows:
+        If value < threshold, then output is value / threshold
+        Else, output is (1 - value)/(1 - threshold)
+
+    """
+    if value < threshold:
+        return value / threshold
+    return (1 - value) / (1 - threshold)
+
+
+# Multiple iterations along skew-tent map
+@njit
+def _iterate_skewtent(threshold, traj_vec):
+    """
+    Computes multiple steps of iteration through the skew-tent map given a
+    starting condition, as the first element of an array full of zeros, and
+    a threshold for the skew-tent map. This function calls _skewtent_onestep
+    for running a single step, and is itself called by _compute_trajectory,
+    which initializes the trajectory array.
+
+    Parameters
+    ----------
+    threshold : scalar, float64
+        Threshold value of the skew-tent map.
+    traj_vec : array, 1D, float64
+        Pre-allocated array of zeroes with the 1st element containing a
+        value corresponding to initial condition of the skew-tent map
+
+    Returns
+    -------
+    traj_vec : array, 1D, float64
+        Array populated with values corresponding to the trajectory taken by
+        recursive iteration through a skew-tent map. Length of this trajectory
+        is inferred from the array shape.
+
+    """
+    # Iteration using for-loop over indices
+    for idx in range(1, len(traj_vec)):
+
+        # Execute single step of iteration using previous value and threshold
+        traj_vec[idx] = _skewtent_onestep(traj_vec[idx - 1], threshold)
+
+    # Return populated array
+    return traj_vec
+
+
+# Compute trajectory given initial conditions, threshold and size
+@njit
+def _compute_trajectory(init_cond, threshold, length):
+    """
+    Computes the trajectory along a skew-tent map with given threshold and an
+    initial condition for a given distance. Doesn't validate input. This is
+    called by compute_trajectory after checking inputs.
+
+    Parameters
+    ----------
+    init_cond : scalar, float64
+        Initial value for iterating through the skew-tent map.
+    threshold : scalar, float64
+        Threshold value of the skew-tent map.
+    length : scalar, integer
+        Size of the trajectory to compute through iteration.
+
+    Returns
+    -------
+    array, 1D, float64
+        Array of demanded size filled with values corresponding to the
+        trajectory.
+
+    """
+    # Pre-allocate array for trajectory with known size
+    traj_vec = np.zeros(length, dtype=np.float64)
+
+    # Assign initial condition to first element of array
+    traj_vec[0] = init_cond
+
+    # Run iterations and return populated array
+    return _iterate_skewtent(threshold, traj_vec)
+
+
+# Warmup for Numba cache initialization
+def warmup():
+    """
+    Runs all the Numba-optimized functions to initialize Numba's JIT.
+    Returns nothing and only prints to stdout.
+
+    Returns
+    -------
+    None.
+
+    """
+    # Test for a known value
+    if _compute_trajectory(0.1, 0.2, 3)[-1] == np.array([0.625]):
+        print("> Numba JIT warmup successful for chaotic_sampler ...")
+    else:
+        print("> Numba JIT warmup failed for chaotic_sampler ...")
+
+
+def compute_trajectory(init_cond, threshold, length, validate=False):
+    """
+    Computes the trajectory along a skew-tent map with given threshold and an
+    initial condition for a given distance. Wrapper around _compute_trajectory
+    and checks inputs for sanity
+
+    Parameters
+    ----------
+    init_cond : scalar, float64
+        Initial value for iterating through the skew-tent map.
+            range: 0 < init_cond < 1
+    threshold : scalar, float64
+        Threshold value of the skew-tent map.
+            range: 0 < threshold < 1
+    length : scalar, integer
+        Size of the trajectory to compute through iteration.
+            range: 10^2 < length < 10^7
+
+    Returns
+    -------
+    array, 1D, float64
+        Array of demanded size filled with values corresponding to the
+        trajectory.
+
+    """
+    # Return trajectory if inputs are valid
+    if validate:
+        if _check_trajectory_inputs(init_cond, threshold, length):
+            return _compute_trajectory(init_cond, threshold, length)
+        else:
+            # Else and return nothing
+            return None
+
+    return _compute_trajectory(init_cond, threshold, length)
+
+
+Feature_extractor.py:
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -497,176 +675,8 @@ def warmup():
 # Execute warmup upon import
 warmup()
 
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-This module contains functions for computing trajectory along the skew-tent map.
 
-compute_trajectory() is the main function that wraps around smaller modular
-functions composed specifically for performance optimizations by Numba's JIT
-
-Dependencies: numpy, numba
-
-@author: Dr. Pranay S. Yadav
-"""
-
-
-# Import calls
-import numpy as np
-from numba import vectorize, float64, njit
-from ChaosFEX.input_validator import _check_trajectory_inputs
-
-# Compute single step of iteration through skew-tent map
-@vectorize([float64(float64, float64)])
-def _skewtent_onestep(value, threshold):
-    """
-    Computes a single step of iteration through the skew-tent map given an
-    input (previous) value and a threshold. Returns the next value as output.
-    This function is called by _iterate_skewtent for iterating repeatedly.
-
-    Parameters
-    ----------
-    value : scalar, float64
-        Input value to the skew-tent map.
-    threshold : scalar, float64
-        Threshold value of the skew-tent map.
-
-    Returns
-    -------
-    Output value as float64 from the skew-tent map.
-    Computed conditionally as follows:
-        If value < threshold, then output is value / threshold
-        Else, output is (1 - value)/(1 - threshold)
-
-    """
-    if value < threshold:
-        return value / threshold
-    return (1 - value) / (1 - threshold)
-
-
-# Multiple iterations along skew-tent map
-@njit
-def _iterate_skewtent(threshold, traj_vec):
-    """
-    Computes multiple steps of iteration through the skew-tent map given a
-    starting condition, as the first element of an array full of zeros, and
-    a threshold for the skew-tent map. This function calls _skewtent_onestep
-    for running a single step, and is itself called by _compute_trajectory,
-    which initializes the trajectory array.
-
-    Parameters
-    ----------
-    threshold : scalar, float64
-        Threshold value of the skew-tent map.
-    traj_vec : array, 1D, float64
-        Pre-allocated array of zeroes with the 1st element containing a
-        value corresponding to initial condition of the skew-tent map
-
-    Returns
-    -------
-    traj_vec : array, 1D, float64
-        Array populated with values corresponding to the trajectory taken by
-        recursive iteration through a skew-tent map. Length of this trajectory
-        is inferred from the array shape.
-
-    """
-    # Iteration using for-loop over indices
-    for idx in range(1, len(traj_vec)):
-
-        # Execute single step of iteration using previous value and threshold
-        traj_vec[idx] = _skewtent_onestep(traj_vec[idx - 1], threshold)
-
-    # Return populated array
-    return traj_vec
-
-
-# Compute trajectory given initial conditions, threshold and size
-@njit
-def _compute_trajectory(init_cond, threshold, length):
-    """
-    Computes the trajectory along a skew-tent map with given threshold and an
-    initial condition for a given distance. Doesn't validate input. This is
-    called by compute_trajectory after checking inputs.
-
-    Parameters
-    ----------
-    init_cond : scalar, float64
-        Initial value for iterating through the skew-tent map.
-    threshold : scalar, float64
-        Threshold value of the skew-tent map.
-    length : scalar, integer
-        Size of the trajectory to compute through iteration.
-
-    Returns
-    -------
-    array, 1D, float64
-        Array of demanded size filled with values corresponding to the
-        trajectory.
-
-    """
-    # Pre-allocate array for trajectory with known size
-    traj_vec = np.zeros(length, dtype=np.float64)
-
-    # Assign initial condition to first element of array
-    traj_vec[0] = init_cond
-
-    # Run iterations and return populated array
-    return _iterate_skewtent(threshold, traj_vec)
-
-
-# Warmup for Numba cache initialization
-def warmup():
-    """
-    Runs all the Numba-optimized functions to initialize Numba's JIT.
-    Returns nothing and only prints to stdout.
-
-    Returns
-    -------
-    None.
-
-    """
-    # Test for a known value
-    if _compute_trajectory(0.1, 0.2, 3)[-1] == np.array([0.625]):
-        print("> Numba JIT warmup successful for chaotic_sampler ...")
-    else:
-        print("> Numba JIT warmup failed for chaotic_sampler ...")
-
-
-def compute_trajectory(init_cond, threshold, length, validate=False):
-    """
-    Computes the trajectory along a skew-tent map with given threshold and an
-    initial condition for a given distance. Wrapper around _compute_trajectory
-    and checks inputs for sanity
-
-    Parameters
-    ----------
-    init_cond : scalar, float64
-        Initial value for iterating through the skew-tent map.
-            range: 0 < init_cond < 1
-    threshold : scalar, float64
-        Threshold value of the skew-tent map.
-            range: 0 < threshold < 1
-    length : scalar, integer
-        Size of the trajectory to compute through iteration.
-            range: 10^2 < length < 10^7
-
-    Returns
-    -------
-    array, 1D, float64
-        Array of demanded size filled with values corresponding to the
-        trajectory.
-
-    """
-    # Return trajectory if inputs are valid
-    if validate:
-        if _check_trajectory_inputs(init_cond, threshold, length):
-            return _compute_trajectory(init_cond, threshold, length)
-        else:
-            # Else and return nothing
-            return None
-
-    return _compute_trajectory(init_cond, threshold, length)
-
+input_validator.py:
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -830,4 +840,310 @@ def validate(feat_mat, initial_cond, trajectory_len, epsilon, threshold):
     else:
         return False
 
-The above code is for feature extraction using a chaotic map. I want to change the structure of the above code. Instead of iterating through all the values, I want to apply a gradient descent algorithm. It will just find the initial starting point, wpsilon and all the parameters of the chaotic equation. All these values need to lie between 0 and 1
+
+
+This is the above original code that I want to follow, below is my code, that you have to complete:
+train.py:
+import argparse
+import torch
+from torch.optim import Adam
+from sklearn.model_selection import KFold
+from utils import load_data, save_parameters
+from ChaosNet.model import ChaosNetModel
+
+def train_chaosnet(X_train, y_train, num_folds=5, num_epochs=100, learning_rate=0.01):
+    kf = KFold(n_splits=num_folds, shuffle=True, random_state=42)
+
+    best_params = None
+    best_score = float('-inf')
+
+    for fold, (train_index, val_index) in enumerate(kf.split(X_train)):
+        print(f"Fold {fold + 1}/{num_folds}")
+
+        X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
+        y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
+
+        model = ChaosNetModel(num_features=X_train.shape[1])
+        optimizer = Adam(model.parameters(), lr=learning_rate)
+        # Define the loss function
+        criterion = torch.CrossEntropyLoss()
+
+        for epoch in range(num_epochs):
+            optimizer.zero_grad()
+
+            pred = model(X_train_fold)
+            loss = criterion(pred, y_train_fold)
+
+            loss.backward()
+            optimizer.step()
+
+            if (epoch + 1) % 10 == 0:
+                print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss.item()}")
+
+        # Evaluate on validation set
+        with torch.no_grad():
+            val_loss = model.compute_loss(X_val_fold, y_val_fold)
+            val_score = -val_loss.item()  # Convert back to accuracy
+
+        print(f"Validation Score: {val_score}")
+
+        if val_score > best_score:
+            best_score = val_score
+            best_params = model.state_dict()
+
+    return best_params
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Train a ChaosNet model with k-fold cross-validation.")
+    parser.add_argument('--data_path', type=str, default="/Data", help='Path to the training data directory')
+    parser.add_argument('--num_folds', type=int, default=5, help='Number of folds for cross-validation')
+    parser.add_argument('--num_epochs', type=int, default=100, help='Number of training epochs per fold')
+    parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate for the optimizer')
+
+    args = parser.parse_args()
+
+    X_train, y_train, X_test, y_test = load_data(args.data_path)
+
+    optimal_params = train_chaosnet(X_train, y_train, num_folds=args.num_folds,
+                                    num_epochs=args.num_epochs, learning_rate=args.learning_rate)
+
+    save_parameters(optimal_params, "chaosnet_params.pth")
+
+    print("Training completed. Optimal parameters saved.")
+
+test.py:
+import numpy as np
+from ChaosNet import feature_extractor as CFX
+from utils import load_data, load_parameters
+
+def test_chaosnet(X_test, y_test, params):
+    # Unpack parameters
+    equation_params, initial_cond, epsilon = params[:-2], params[-2], params[-1]
+
+    # Extract features using ChaosNet
+    features = CFX.transform(X_test, initial_cond, 10000, epsilon, equation_params)
+
+    # Simple classifier (e.g., nearest centroid)
+    centroids = np.array([features[y_test == c].mean(axis=0) for c in np.unique(y_test)])
+    y_pred = np.argmin(np.linalg.norm(features[:, None] - centroids, axis=2), axis=1)
+
+    # Calculate accuracy
+    accuracy = np.mean(y_pred == y_test)
+    return accuracy
+
+if __name__ == "__main__":
+    # Load data
+    X_test, y_test = load_data("test_data.csv")
+
+    # Load parameters
+    params = load_parameters("chaosnet_params.npy")
+
+    # Test ChaosNet
+    accuracy = test_chaosnet(X_test, y_test, params)
+
+    print(f"Test accuracy: {accuracy:.4f}")
+
+utils.py:
+import numpy as np
+import pandas as pd
+import os
+
+def load_data(directory):
+    X_train = pd.read_csv(os.path.join(directory, 'X_train.csv')).values
+    y_train = pd.read_csv(os.path.join(directory, 'y_train.csv')).values
+    X_test = pd.read_csv(os.path.join(directory, 'X_test.csv')).values
+    y_test = pd.read_csv(os.path.join(directory, 'y_test.csv')).values
+
+    return X_train, y_train, X_test, y_test
+
+def save_parameters(params, filename):
+    np.save(filename, params)
+
+def load_parameters(filename):
+    return np.load(filename)
+
+and in the folder ChaosNet, I have the following:
+__init__.py:
+from .model import ChaosNetModel
+from .feature_extractor import FeatureExtractor
+from .chaos_sampler import ChaosSampler
+from .validate import validate_inputs
+
+chaos_sampler.py:
+import numpy as np
+from numba import vectorize, float64, njit
+import torch
+import torch.nn as nn
+
+class ChaosSampler(nn.Module):
+    def __init__(self):
+        super(ChaosSampler, self).__init__()
+
+    @vectorize([float64(float64, float64)])
+    def _chaotic_map_step(value, *params):
+        # Implement your chaotic map here
+        # This is a placeholder implementation
+        return params[0] * value * (1 - value)
+
+    @njit
+    def _iterate_chaotic_map(params, traj_vec):
+        for idx in range(1, len(traj_vec)):
+            traj_vec[idx] = _chaotic_map_step(traj_vec[idx - 1], *params)
+        return traj_vec
+
+    @njit
+    def _compute_trajectory(init_cond, params, length):
+        traj_vec = np.zeros(length, dtype=np.float64)
+        traj_vec[0] = init_cond
+        return _iterate_chaotic_map(params, traj_vec)
+
+    def compute_trajectory(init_cond, params, length, validate=False):
+        # Validation can be implemented here if needed
+        return _compute_trajectory(init_cond, params, length)
+
+    def warmup():
+        test_params = np.array([3.8])  # Example parameter for logistic map
+        if _compute_trajectory(0.1, test_params, 3)[-1] == np.array([0.4332]):
+            print("> Numba JIT warmup successful for chaotic_sampler ...")
+        else:
+            print("> Numba JIT warmup failed for chaotic_sampler ...")
+
+warmup()
+
+
+feature_extractor.py:
+import numpy as np
+import numba as nb
+import torch
+import torch.nn as nn
+from .chaos_sampler import compute_trajectory
+
+class FeatureExtractor(nn.Module):
+    def __init__(self):
+        super(FeatureExtractor, self).__init__()
+
+    @nb.vectorize([nb.boolean(nb.float64, nb.float64, nb.float64)])
+    def _compare(value1, value2, value3):
+        return abs(value1 - value2) < value3
+
+    @nb.njit
+    def _compute_match_idx(value, array, epsilon):
+        length = len(array)
+        for idx in range(length):
+            if _compare(value, array[idx], epsilon):
+                return idx
+        return length
+
+    @nb.njit
+    def _compute_energy(path):
+        return path @ path
+
+    @nb.njit
+    def _compute_ttss_entropy(path, threshold):
+        prob = np.count_nonzero(path > threshold) / len(path)
+        return np.array([prob, -prob * np.log2(prob) - (1 - prob) * np.log2(1 - prob)])
+
+    @nb.njit(parallel=True)
+    def _compute_measures(feat_mat, trajectory, epsilon, threshold, meas_mat):
+        for i in nb.prange(feat_mat.shape[0]):
+            for j in nb.prange(feat_mat.shape[1]):
+                idx = _compute_match_idx(feat_mat[i, j], trajectory, epsilon)
+                meas_mat[i, j, 2] = idx
+                if idx != 0:
+                    path = trajectory[:idx]
+                    meas_mat[i, j, 1] = _compute_energy(path)
+                    ttss_entropy = _compute_ttss_entropy(path, threshold)
+                    meas_mat[i, j, 0] = ttss_entropy[0]
+                    meas_mat[i, j, 3] = ttss_entropy[1]
+        return meas_mat
+
+    def transform(feat_mat, initial_cond, trajectory_len, epsilon, params):
+        dimx, dimy = feat_mat.shape
+        meas_mat = np.zeros([dimx, dimy, 4])
+        trajectory = compute_trajectory(initial_cond, params, trajectory_len)
+        threshold = params[0]  # Assuming first parameter is threshold
+        out = _compute_measures(feat_mat, trajectory, epsilon, threshold, meas_mat)
+        out[:, :, 3] = np.nan_to_num(out[:, :, 3])
+        out = out.transpose([0, 2, 1]).reshape([dimx, dimy * 4])
+        return out
+
+    def warmup():
+        feat_mat = np.array([[0.1, 0.2], [0.3, 0.4]])
+        out = transform(feat_mat, initial_cond=0.1, trajectory_len=100, epsilon=0.01, params=np.array([0.2]))
+        if out.shape == (2, 8) and out[0, 5] == 12:
+            print("> Numba JIT warmup successful for transform ...")
+        else:
+            print("> Numba JIT warmup failed for transform ...")
+
+warmup()
+
+
+model.py:
+import torch
+import torch.nn as nn
+from .feature_extractor import FeatureExtractor
+from .chaos_sampler import ChaosSampler
+
+class ChaosNetModel(nn.Module):
+    def __init__(self, num_features):
+        super(ChaosNetModel, self).__init__()
+        self.chaos_sampler = ChaosSampler()
+        self.feature_extractor = FeatureExtractor()
+        self.classifier = nn.Linear(num_features * 4, 2)  # Binary classification
+
+        # Learnable parameters
+        self.initial_cond = nn.Parameter(torch.rand(1))
+        self.threshold = nn.Parameter(torch.rand(1))
+        self.epsilon = nn.Parameter(torch.rand(1))
+
+    def forward(self, x):
+        trajectory = self.chaos_sampler(self.initial_cond, self.threshold, 10000)
+        features = self.feature_extractor(x, trajectory, self.epsilon, self.threshold)
+        return self.classifier(features)
+
+    def extract_features(self, x):
+        trajectory = self.chaos_sampler(self.initial_cond, self.threshold, 10000)
+        return self.feature_extractor(x, trajectory, self.epsilon, self.threshold)
+
+    def classify(self, features):
+        return torch.argmax(self.classifier(features), dim=1)
+
+    def compute_loss(self, x, y):
+        outputs = self(x)
+        return nn.functional.cross_entropy(outputs, y)
+
+validate.py:
+import torch
+
+def validate_inputs(feat_mat, initial_cond, trajectory_len, epsilon, threshold):
+    if not _check_features(feat_mat):
+        return False
+    if not _check_trajectory_inputs(initial_cond, threshold, trajectory_len):
+        return False
+    if not _check_epsilon(epsilon):
+        return False
+    return True
+
+def _check_features(feat_mat):
+    if not isinstance(feat_mat, torch.Tensor) or feat_mat.dim() != 2:
+        print("> ERROR: feat_mat should be a 2D torch.Tensor ...")
+        return False
+    if feat_mat.min() < 0 or feat_mat.max() > 1:
+        print("> ERROR: feat_mat should be scaled between 0 & 1 ...")
+        return False
+    return True
+
+def _check_trajectory_inputs(initial_cond, threshold, trajectory_len):
+    if not (0 <= initial_cond <= 1 and 0 <= threshold <= 1):
+        print("> ERROR: initial_condition & threshold should be between 0 and 1 ...")
+        return False
+    if not (100 <= trajectory_len <= int(1e7)):
+        print("> ERROR: trajectory_len should be an integer between 10^2 & 10^7 ...")
+        return False
+    return True
+
+def _check_epsilon(epsilon):
+    if not (1e-5 <= epsilon <= 1.0):
+        print("> ERROR: epsilon must be between 0.5 and 10^-5")
+        return False
+    return True

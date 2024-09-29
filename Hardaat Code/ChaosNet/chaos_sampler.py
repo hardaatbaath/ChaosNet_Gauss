@@ -1,33 +1,41 @@
 import numpy as np
 from numba import vectorize, float64, njit
 
-@vectorize([float64(float64, float64)])
-def _chaotic_map_step(value, *params):
-    # Implement your chaotic map here
-    # This is a placeholder implementation
-    return params[0] * value * (1 - value)
+class ChaosSampler:
+    @staticmethod
+    @vectorize([float64(float64, float64)])
+    def _skewtent_onestep(value, threshold):
+        if value < threshold:
+            return value / threshold
+        return (1 - value) / (1 - threshold)
 
-@njit
-def _iterate_chaotic_map(params, traj_vec):
-    for idx in range(1, len(traj_vec)):
-        traj_vec[idx] = _chaotic_map_step(traj_vec[idx - 1], *params)
-    return traj_vec
+    @staticmethod
+    @njit
+    def _iterate_skewtent(threshold, traj_vec):
+        for idx in range(1, len(traj_vec)):
+            traj_vec[idx] = ChaosSampler._skewtent_onestep(traj_vec[idx - 1], threshold)
+        return traj_vec
 
-@njit
-def _compute_trajectory(init_cond, params, length):
-    traj_vec = np.zeros(length, dtype=np.float64)
-    traj_vec[0] = init_cond
-    return _iterate_chaotic_map(params, traj_vec)
+    @staticmethod
+    @njit
+    def _compute_trajectory(init_cond, threshold, length):
+        traj_vec = np.zeros(length, dtype=np.float64)
+        traj_vec[0] = init_cond
+        return ChaosSampler._iterate_skewtent(threshold, traj_vec)
 
-def compute_trajectory(init_cond, params, length, validate=False):
-    # Validation can be implemented here if needed
-    return _compute_trajectory(init_cond, params, length)
+    @staticmethod
+    def compute_trajectory(init_cond, threshold, length, validate=False):
+        if validate:
+            from .validate import _check_trajectory_inputs
+            if not _check_trajectory_inputs(init_cond, threshold, length):
+                return None
+        return ChaosSampler._compute_trajectory(init_cond, threshold, length)
 
-def warmup():
-    test_params = np.array([3.8])  # Example parameter for logistic map
-    if _compute_trajectory(0.1, test_params, 3)[-1] == np.array([0.4332]):
-        print("> Numba JIT warmup successful for chaotic_sampler ...")
-    else:
-        print("> Numba JIT warmup failed for chaotic_sampler ...")
+    @staticmethod
+    def warmup():
+        if ChaosSampler._compute_trajectory(0.1, 0.2, 3)[-1] == np.array([0.625]):
+            print("> Numba JIT warmup successful for chaotic_sampler ...")
+        else:
+            print("> Numba JIT warmup failed for chaotic_sampler ...")
 
-warmup()
+ChaosSampler.warmup()

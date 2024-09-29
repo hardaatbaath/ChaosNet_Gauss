@@ -1,43 +1,72 @@
-import numpy as np
-from scipy.optimize import minimize
-from ChaosNet import feature_extractor as CFX
+import argparse
+import torch
+from torch.optim import Adam
+from sklearn.model_selection import KFold
 from utils import load_data, save_parameters
+from ChaosNet.model import ChaosNetModel
 
-def objective_function(params, X_train, y_train):
-    # Unpack parameters
-    equation_params, initial_cond, epsilon = params[:-2], params[-2], params[-1]
-    
-    # Extract features using ChaosNet
-    features = CFX.transform(X_train, initial_cond, 10000, epsilon, equation_params)
-    
-    # Simple classifier (e.g., nearest centroid)
-    centroids = np.array([features[y_train == c].mean(axis=0) for c in np.unique(y_train)])
-    y_pred = np.argmin(np.linalg.norm(features[:, None] - centroids, axis=2), axis=1)
-    
-    # Return negative accuracy as we want to maximize accuracy
-    return -np.mean(y_pred == y_train)
+def train_chaosnet(X_train, y_train, num_folds=5, num_epochs=100, learning_rate=0.01):
+    kf = KFold(n_splits=num_folds, shuffle=True, random_state=42)
 
-def train_chaosnet(X_train, y_train):
-    # Initialize parameters (assuming 3 equation parameters for now)
-    initial_params = np.random.rand(5)  # 3 equation params + initial_cond + epsilon
-    
-    # Set bounds for parameters
-    bounds = [(0, 1)] * len(initial_params)
-    
-    # Optimize parameters
-    result = minimize(objective_function, initial_params, args=(X_train, y_train), 
-                      method='L-BFGS-B', bounds=bounds)
-    
-    return result.x
+    best_params = None
+    best_score = float('-inf')
+
+    for fold, (train_index, val_index) in enumerate(kf.split(X_train)):
+        print(f"Fold {fold + 1}/{num_folds}")
+
+        X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
+        y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
+
+        model = ChaosNetModel(num_features=X_train.shape[1])
+        optimizer = Adam(model.parameters(), lr=learning_rate)
+        criterion = torch.nn.CrossEntropyLoss()
+
+        X_train_fold = torch.from_numpy(X_train_fold).float()
+        y_train_fold = torch.from_numpy(y_train_fold).long()
+        X_val_fold = torch.from_numpy(X_val_fold).float()
+        y_val_fold = torch.from_numpy(y_val_fold).long()
+
+        for epoch in range(num_epochs):
+            model.train()
+            optimizer.zero_grad()
+
+            pred = model(X_train_fold)
+            loss = criterion(pred, y_train_fold)
+
+            loss.backward()
+            optimizer.step()
+
+            if (epoch + 1) % 10 == 0:
+                print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss.item()}")
+
+        model.eval()
+        with torch.no_grad():
+            val_pred = model(X_val_fold)
+            val_loss = criterion(val_pred, y_val_fold)
+            val_score = (val_pred.argmax(dim=1) == y_val_fold).float().mean().item()
+
+        print(f"Validation Score: {val_score}")
+
+        if val_score > best_score:
+            best_score = val_score
+            best_params = model.state_dict()
+
+    return best_params
 
 if __name__ == "__main__":
-    # Load data
-    X_train, y_train = load_data("train_data.csv")
-    
-    # Train ChaosNet
-    optimal_params = train_chaosnet(X_train, y_train)
-    
-    # Save parameters
-    save_parameters(optimal_params, "chaosnet_params.npy")
-    
+    parser = argparse.ArgumentParser(description="Train a ChaosNet model with k-fold cross-validation.")
+    parser.add_argument('--data_path', type=str, default="/Data", help='Path to the training data directory')
+    parser.add_argument('--num_folds', type=int, default=5, help='Number of folds for cross-validation')
+    parser.add_argument('--num_epochs', type=int, default=100, help='Number of training epochs per fold')
+    parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate for the optimizer')
+
+    args = parser.parse_args()
+
+    X_train, y_train, X_test, y_test = load_data(args.data_path)
+
+    optimal_params = train_chaosnet(X_train, y_train, num_folds=args.num_folds,
+                                    num_epochs=args.num_epochs, learning_rate=args.learning_rate)
+
+    save_parameters(optimal_params, "chaosnet_params.pth")
+
     print("Training completed. Optimal parameters saved.")
