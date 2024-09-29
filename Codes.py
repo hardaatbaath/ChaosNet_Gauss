@@ -172,6 +172,7 @@ def k_cross_validation(FOLD_NO, traindata, trainlabel, testdata, testlabel, INIT
                     B_MAX.append(B[ROW, COL, WID])
                     EPSILON_MAX.append(EPS[ROW, COL, WID])
     
+    print("F1SCORE", FSCORE)
     print("BEST F1SCORE", MAX_FSCORE)
     print("BEST INITIAL NEURAL ACTIVITY = ", Q_MAX)
     print("BEST DISCRIMINATION THRESHOLD = ", B_MAX)
