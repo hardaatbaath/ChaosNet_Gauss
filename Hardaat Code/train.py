@@ -18,7 +18,7 @@ def train_chaosnet(X_train, y_train, num_folds=5, num_epochs=100, learning_rate=
         y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
 
         # Initialize ChaosNetModel with flexible number of thresholds
-        model = ChaosNetModel(num_features=X_train.shape[1], num_threshold=2)
+        model = ChaosNetModel(num_features=X_train.shape[1], num_threshold=1)
         optimizer = Adam(model.parameters(), lr=learning_rate)
         criterion = torch.nn.CrossEntropyLoss()
 

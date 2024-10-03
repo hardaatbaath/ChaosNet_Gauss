@@ -4,7 +4,7 @@ from ChaosNet.model import ChaosNetModel
 from utils import load_data, load_parameters
 
 def test_chaosnet(X_test, y_test, params):
-    model = ChaosNetModel(num_features=X_test.shape[1])
+    model = ChaosNetModel(num_features=X_test.shape[1], num_threshold=1)
     model.load_state_dict(params)
     model.eval()
 
