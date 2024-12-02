@@ -115,7 +115,7 @@ def _compute_energy(path):
 
 # Compute TTSS and entropy
 @nb.njit
-def _compute_ttss_entropy(path, threshold):
+def _compute_ttss_entropy(path, alpha, beta):
     """
     This function computes TTSS and Shannon Entropy based on the provided path.
     Threshold is used to bin the path into 2 values, from which probabilities
@@ -135,12 +135,27 @@ def _compute_ttss_entropy(path, threshold):
         2nd element corresponds to Shannon Entropy
 
     """
-    prob = np.count_nonzero(path > threshold) / len(path)
-    return np.array([prob, -prob * np.log2(prob) - (1 - prob) * np.log2(1 - prob)])
+
+    # Ensure thresholds are in the correct order
+    low_threshold = min(alpha, beta)
+    high_threshold = max(alpha, beta)
+    
+    # Count probabilities for three regions
+    prob_low = np.count_nonzero(path <= low_threshold) / len(path)
+    prob_mid = np.count_nonzero((path > low_threshold) & (path <= high_threshold)) / len(path)
+    prob_high = np.count_nonzero(path > high_threshold) / len(path)
+
+    epsilon = 1e-10
+    entropy = 0
+    for prob in [prob_low, prob_mid, prob_high]:
+        if prob > 0:
+            entropy -= prob * np.log2(prob + epsilon)
+    
+    return np.array([prob_mid, entropy])
 
 
 @nb.njit(parallel=True)
-def _compute_measures(feat_mat, trajectory, epsilon, threshold, meas_mat):
+def _compute_measures(feat_mat, trajectory, epsilon, alpha, beta, meas_mat):
     """
     This functions iterates over elements in all rows and columns of the input
     feat_mat, computes 4 estimates and stores them in meas_mat along its 3rd
@@ -193,14 +208,14 @@ def _compute_measures(feat_mat, trajectory, epsilon, threshold, meas_mat):
                 meas_mat[i, j, 1] = _compute_energy(path)
 
                 # Compute TTSS and Entropy along path
-                ttss_entropy = _compute_ttss_entropy(path, threshold)
+                ttss_entropy = _compute_ttss_entropy(path, alpha, beta)
                 meas_mat[i, j, 0] = ttss_entropy[0]
                 meas_mat[i, j, 3] = ttss_entropy[1]
 
     return meas_mat
 
 
-def transform(feat_mat, initial_cond, trajectory_len, epsilon, threshold):
+def transform(feat_mat, initial_cond, trajectory_len, epsilon, alpha, beta):
     """
     This function takes an input feature matrix with 4 tuning parameters
     for estimating features using a chaotic trajectory along the skew-tent map.
@@ -235,7 +250,7 @@ def transform(feat_mat, initial_cond, trajectory_len, epsilon, threshold):
 
     """
     # Stop if invalid inputs
-    if not validate(feat_mat, initial_cond, trajectory_len, epsilon, threshold):
+    if not validate(feat_mat, initial_cond, trajectory_len, epsilon, alpha, beta):
         return None
 
     # Initialize a 3D matrix of zeroes based on input dimensions
@@ -243,10 +258,10 @@ def transform(feat_mat, initial_cond, trajectory_len, epsilon, threshold):
     meas_mat = np.zeros([dimx, dimy, 4])
 
     # Compute trajectory with specified parameters
-    trajectory = cs.compute_trajectory(initial_cond, threshold, trajectory_len)
+    trajectory = cs.compute_trajectory(initial_cond, alpha, beta, trajectory_len)
 
     # Estimate measures from the trajectory for each element in input matrix
-    out = _compute_measures(feat_mat, trajectory, epsilon, threshold, meas_mat)
+    out = _compute_measures(feat_mat, trajectory, epsilon, alpha, beta, meas_mat)
 
     # Convert nan's in entropy due to log(0) to 0s
     out[:, :, 3] = np.nan_to_num(out[:, :, 3])
