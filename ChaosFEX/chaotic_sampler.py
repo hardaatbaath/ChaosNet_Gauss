@@ -18,7 +18,7 @@ from numba import vectorize, float64, njit
 from ChaosFEX.input_validator import _check_trajectory_inputs
 
 # Compute single step of iteration through gauss map
-@vectorize([float64(float64, float64)])
+@vectorize([float64(float64, float64, float64)])
 def _gauss_onestep(value, alpha, beta):
     """
     Computes a single step of iteration through the gauss map given an

@@ -86,6 +86,7 @@ def k_cross_validation(FOLD_NO, traindata, trainlabel, testdata, testlabel, INIT
     ACCURACY = np.zeros((len(D_alpha), len(D_beta), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
     FSCORE = np.zeros((len(D_alpha), len(D_beta), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
     Q = np.zeros((len(D_alpha), len(D_beta), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
+    A = np.zeros((len(D_alpha), len(D_beta), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
     B = np.zeros((len(D_alpha), len(D_beta), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
     EPS = np.zeros((len(D_alpha), len(D_beta), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
 
@@ -94,21 +95,10 @@ def k_cross_validation(FOLD_NO, traindata, trainlabel, testdata, testlabel, INIT
     KF.get_n_splits(traindata) # returns the number of splitting iterations in the cross-validator
     print(KF) 
     
-    ROW_a = -1
-    ROW_b = -1
-    COL = -1
-    WIDTH = -1
-    for alpha in D_alpha:
-        ROW_a = ROW_a+1
-        COL = -1
-        WIDTH = -1
-        for beta in D_beta:
-            ROW_b = ROW_b+1
-            for INA in INITIAL_NEURAL_ACTIVITY:
-                COL =COL+1
-                WIDTH = -1
-                for EPSILON_1 in EPSILON:
-                    WIDTH = WIDTH + 1
+    for alpha_idx, alpha in enumerate(D_alpha):
+        for beta_idx, beta in enumerate(D_beta):
+            for ina_idx, INA in enumerate(INITIAL_NEURAL_ACTIVITY):
+                for eps_idx, EPSILON_1 in enumerate(EPSILON):
                     
                     ACC_TEMP =[]
                     FSCORE_TEMP=[]
@@ -127,19 +117,20 @@ def k_cross_validation(FOLD_NO, traindata, trainlabel, testdata, testlabel, INIT
                         mean_each_class, Y_PRED = chaosnet(FEATURE_MATRIX_TRAIN,Y_TRAIN, FEATURE_MATRIX_VAL)
                         
                         ACC = accuracy_score(Y_VAL, Y_PRED)*100
-                        RECALL = recall_score(Y_VAL, Y_PRED , average="macro")
-                        PRECISION = precision_score(Y_VAL, Y_PRED , average="macro")
+                        RECALL = recall_score(Y_VAL, Y_PRED , average="macro", zero_division=1)
+                        PRECISION = precision_score(Y_VAL, Y_PRED , average="macro", zero_division=1)
                         F1SCORE = f1_score(Y_VAL, Y_PRED, average="macro")
                                     
                         
                         ACC_TEMP.append(ACC)
                         FSCORE_TEMP.append(F1SCORE)
-                    Q[ROW_a, ROW_b, COL, WIDTH ] = INA # Initial Neural Activity
-                    B[ROW_a, ROW_b, COL, WIDTH ] = DT # Discrimination Threshold
-                    EPS[ROW_a, ROW_b, COL, WIDTH ] = EPSILON_1 
-                    ACCURACY[ROW_a, ROW_b, COL, WIDTH ] = np.mean(ACC_TEMP)
-                    FSCORE[ROW_a, ROW_b, COL, WIDTH ] = np.mean(FSCORE_TEMP)
-                    print("Mean F1-Score for Q = ", Q[ROW_a, ROW_b, COL, WIDTH ],"B = ", B[ROW_a, ROW_b, COL, WIDTH ],"EPSILON = ", EPS[ROW_a, ROW_b, COL, WIDTH ]," is  = ",  np.mean(FSCORE_TEMP)  )
+                    Q[alpha_idx, beta_idx, ina_idx, eps_idx ] = INA # Initial Neural Activity
+                    A[alpha_idx, beta_idx, ina_idx, eps_idx ] = alpha # Alpha
+                    B[alpha_idx, beta_idx, ina_idx, eps_idx ] = beta # Discrimination Threshold
+                    EPS[alpha_idx, beta_idx, ina_idx, eps_idx ] = EPSILON_1 
+                    ACCURACY[alpha_idx, beta_idx, ina_idx, eps_idx ] = np.mean(ACC_TEMP)
+                    FSCORE[alpha_idx, beta_idx, ina_idx, eps_idx ] = np.mean(FSCORE_TEMP)
+                    print("Mean F1-Score for Q = ", Q[alpha_idx, beta_idx, ina_idx, eps_idx ],"A = ", A[alpha_idx, beta_idx, ina_idx, eps_idx ],"B = ", B[alpha_idx, beta_idx, ina_idx, eps_idx ],"EPSILON = ", EPS[alpha_idx, beta_idx, ina_idx, eps_idx ]," is  = ",  np.mean(FSCORE_TEMP)  )
         
     print("Saving Hyperparameter Tuning Results")
     
@@ -158,29 +149,32 @@ def k_cross_validation(FOLD_NO, traindata, trainlabel, testdata, testlabel, INIT
     np.save(RESULT_PATH+"/h_fscore.npy", FSCORE )    
     np.save(RESULT_PATH+"/h_accuracy.npy", ACCURACY ) 
     np.save(RESULT_PATH+"/h_Q.npy", Q ) 
+    np.save(RESULT_PATH+"/h_A.npy", A )
     np.save(RESULT_PATH+"/h_B.npy", B )
     np.save(RESULT_PATH+"/h_EPS.npy", EPS )               
     
     
     MAX_FSCORE = np.max(FSCORE)
     Q_MAX = []
+    A_MAX = []
     B_MAX = []
     EPSILON_MAX = []
     
-    for ROW_a in range(0, len(D_alpha)):
-        for ROW_b in range(0, len(D_beta)):
-            for COL in range(0, len(INITIAL_NEURAL_ACTIVITY)):
+    for alpha_idx in range(0, len(D_alpha)):
+        for beta_idx in range(0, len(D_beta)):
+            for ina_idx in range(0, len(INITIAL_NEURAL_ACTIVITY)):
                 for WID in range(0, len(EPSILON)):
-                    if FSCORE[ROW_a, ROW_b, COL, WID] == MAX_FSCORE:
-                        Q_MAX.append(Q[ROW_a, ROW_b, COL, WID])
-                        B_MAX.append(B[ROW_a, ROW_b, COL, WID])
-                        EPSILON_MAX.append(EPS[ROW_a, ROW_b, COL, WID])
+                    if FSCORE[alpha_idx, beta_idx, ina_idx, WID] == MAX_FSCORE:
+                        Q_MAX.append(Q[alpha_idx, beta_idx, ina_idx, WID])
+                        A_MAX.append(A[alpha_idx, beta_idx, ina_idx, WID])
+                        B_MAX.append(B[alpha_idx, beta_idx, ina_idx, WID])
+                        EPSILON_MAX.append(EPS[alpha_idx, beta_idx, ina_idx, WID])
     
     print("F1SCORE", FSCORE)
     print("BEST F1SCORE", MAX_FSCORE)
     print("BEST INITIAL NEURAL ACTIVITY = ", Q_MAX)
-    print("BEST DISCRIMINATION THRESHOLD = ", B_MAX)
+    print(f"BEST DISCRIMINATION THRESHOLD Alpha, Beta= {A_MAX}, {B_MAX} ")
     print("BEST EPSILON = ", EPSILON_MAX)
-    return FSCORE, Q, B, EPS, EPSILON
+    return FSCORE, Q, A, B, EPS, EPSILON
     
 

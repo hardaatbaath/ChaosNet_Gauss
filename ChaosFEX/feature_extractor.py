@@ -285,7 +285,7 @@ def warmup():
 
     # Execute extract features
     out = transform(
-        feat_mat, initial_cond=0.1, trajectory_len=100, epsilon=0.01, threshold=0.2
+        feat_mat, initial_cond=0.1, trajectory_len=100, epsilon=0.01, alpha=0.2, beta=0.3
     )
 
     # Check if output matches expected value
