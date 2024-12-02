@@ -15,7 +15,7 @@ Dependencies: numpy
 from numpy import ndarray, float64
 
 # Function definitions
-def _check_trajectory_inputs(init_cond, threshold, trajectory_len):
+def _check_trajectory_inputs(init_cond, alpha, beta, trajectory_len):
     """
     This function checks for the type and range of the 3 hyperparameters for
     the skew-tent map. These are the input to the function compute_trajectory
@@ -40,13 +40,17 @@ def _check_trajectory_inputs(init_cond, threshold, trajectory_len):
 
     """
     # Check types of init_cond and threshold
-    if not (isinstance(init_cond, float) and isinstance(threshold, float)):
+    if not (isinstance(init_cond, float) and isinstance(alpha, float) and isinstance(beta, float)):
         print("> ERROR: init_cond & threshold should be of type float ...")
         return False
 
     # Check ranges of init_cond and threshold
-    if not (0 <= init_cond <= 1 and 0 <= threshold <= 1):
-        print("> ERROR: init_condition & threshold cannot be <=0 or >=1 ...")
+    if not (0 <= init_cond <= 1 and 0 <= alpha <= 1):
+        print("> ERROR: init_condition & alpha cannot be <=0 or >=1 ...")
+        return False
+    
+    if not (0 <= init_cond <= 1 and 0 <= beta <= 1):
+        print("> ERROR: init_condition & beta cannot be <=0 or >=1 ...")
         return False
 
     # Check type & range of length
@@ -122,7 +126,7 @@ def _check_epsilon(epsilon):
     return True
 
 
-def validate(feat_mat, initial_cond, trajectory_len, epsilon, threshold):
+def validate(feat_mat, initial_cond, trajectory_len, epsilon, alpha, beta):
     """
     This function is a wrapper around _check_trajectory_inputs, _check_features,
     and _check_epsilon. It checks for all the inputs passed to the function
@@ -155,7 +159,7 @@ def validate(feat_mat, initial_cond, trajectory_len, epsilon, threshold):
     if (
         _check_epsilon(epsilon)
         and _check_features(feat_mat)
-        and _check_trajectory_inputs(initial_cond, threshold, trajectory_len)
+        and _check_trajectory_inputs(initial_cond, alpha, beta, trajectory_len)
     ):
         return True
     else:

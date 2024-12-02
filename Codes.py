@@ -54,7 +54,7 @@ def chaosnet(traindata, trainlabel, testdata):
 
 
 
-def k_cross_validation(FOLD_NO, traindata, trainlabel, testdata, testlabel, INITIAL_NEURAL_ACTIVITY, DISCRIMINATION_THRESHOLD, EPSILON, DATA_NAME):
+def k_cross_validation(FOLD_NO, traindata, trainlabel, testdata, testlabel, INITIAL_NEURAL_ACTIVITY, D_alpha, D_beta, EPSILON, DATA_NAME):
     """
 
     Parameters
@@ -83,61 +83,64 @@ def k_cross_validation(FOLD_NO, traindata, trainlabel, testdata, testlabel, INIT
     FSCORE, Q, B, EPS, EPSILON
 
     """
-    ACCURACY = np.zeros((len(DISCRIMINATION_THRESHOLD), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
-    FSCORE = np.zeros((len(DISCRIMINATION_THRESHOLD), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
-    Q = np.zeros((len(DISCRIMINATION_THRESHOLD), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
-    B = np.zeros((len(DISCRIMINATION_THRESHOLD), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
-    EPS = np.zeros((len(DISCRIMINATION_THRESHOLD), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
+    ACCURACY = np.zeros((len(D_alpha), len(D_beta), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
+    FSCORE = np.zeros((len(D_alpha), len(D_beta), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
+    Q = np.zeros((len(D_alpha), len(D_beta), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
+    B = np.zeros((len(D_alpha), len(D_beta), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
+    EPS = np.zeros((len(D_alpha), len(D_beta), len(INITIAL_NEURAL_ACTIVITY),  len(EPSILON)))
 
 
     KF = KFold(n_splits= FOLD_NO, random_state=42, shuffle=True) # Define the split - into 2 folds 
     KF.get_n_splits(traindata) # returns the number of splitting iterations in the cross-validator
     print(KF) 
     
-    ROW = -1
+    ROW_a = -1
+    ROW_b = -1
     COL = -1
     WIDTH = -1
-    for DT in DISCRIMINATION_THRESHOLD:
-        ROW = ROW+1
+    for alpha in D_alpha:
+        ROW_a = ROW_a+1
         COL = -1
         WIDTH = -1
-        for INA in INITIAL_NEURAL_ACTIVITY:
-            COL =COL+1
-            WIDTH = -1
-            for EPSILON_1 in EPSILON:
-                WIDTH = WIDTH + 1
+        for beta in D_beta:
+            ROW_b = ROW_b+1
+            for INA in INITIAL_NEURAL_ACTIVITY:
+                COL =COL+1
+                WIDTH = -1
+                for EPSILON_1 in EPSILON:
+                    WIDTH = WIDTH + 1
+                    
+                    ACC_TEMP =[]
+                    FSCORE_TEMP=[]
                 
-                ACC_TEMP =[]
-                FSCORE_TEMP=[]
+                    for TRAIN_INDEX, VAL_INDEX in KF.split(traindata):
+                        
+                        X_TRAIN, X_VAL = traindata[TRAIN_INDEX], traindata[VAL_INDEX]
+                        Y_TRAIN, Y_VAL = trainlabel[TRAIN_INDEX], trainlabel[VAL_INDEX]
             
-                for TRAIN_INDEX, VAL_INDEX in KF.split(traindata):
-                    
-                    X_TRAIN, X_VAL = traindata[TRAIN_INDEX], traindata[VAL_INDEX]
-                    Y_TRAIN, Y_VAL = trainlabel[TRAIN_INDEX], trainlabel[VAL_INDEX]
-        
 
-                    # Extract features
-                    FEATURE_MATRIX_TRAIN = CFX.transform(X_TRAIN, INA, 10000, EPSILON_1, DT)
-                    FEATURE_MATRIX_VAL = CFX.transform(X_VAL, INA, 10000, EPSILON_1, DT)            
-                
-                   
-                    mean_each_class, Y_PRED = chaosnet(FEATURE_MATRIX_TRAIN,Y_TRAIN, FEATURE_MATRIX_VAL)
+                        # Extract features
+                        FEATURE_MATRIX_TRAIN = CFX.transform(X_TRAIN, INA, 10000, EPSILON_1, alpha, beta)
+                        FEATURE_MATRIX_VAL = CFX.transform(X_VAL, INA, 10000, EPSILON_1, alpha, beta)            
                     
-                    ACC = accuracy_score(Y_VAL, Y_PRED)*100
-                    RECALL = recall_score(Y_VAL, Y_PRED , average="macro")
-                    PRECISION = precision_score(Y_VAL, Y_PRED , average="macro")
-                    F1SCORE = f1_score(Y_VAL, Y_PRED, average="macro")
-                                 
                     
-                    ACC_TEMP.append(ACC)
-                    FSCORE_TEMP.append(F1SCORE)
-                Q[ROW, COL, WIDTH ] = INA # Initial Neural Activity
-                B[ROW, COL, WIDTH ] = DT # Discrimination Threshold
-                EPS[ROW, COL, WIDTH ] = EPSILON_1 
-                ACCURACY[ROW, COL, WIDTH ] = np.mean(ACC_TEMP)
-                FSCORE[ROW, COL, WIDTH ] = np.mean(FSCORE_TEMP)
-                print("Mean F1-Score for Q = ", Q[ROW, COL, WIDTH ],"B = ", B[ROW, COL, WIDTH ],"EPSILON = ", EPS[ROW, COL, WIDTH ]," is  = ",  np.mean(FSCORE_TEMP)  )
-    
+                        mean_each_class, Y_PRED = chaosnet(FEATURE_MATRIX_TRAIN,Y_TRAIN, FEATURE_MATRIX_VAL)
+                        
+                        ACC = accuracy_score(Y_VAL, Y_PRED)*100
+                        RECALL = recall_score(Y_VAL, Y_PRED , average="macro")
+                        PRECISION = precision_score(Y_VAL, Y_PRED , average="macro")
+                        F1SCORE = f1_score(Y_VAL, Y_PRED, average="macro")
+                                    
+                        
+                        ACC_TEMP.append(ACC)
+                        FSCORE_TEMP.append(F1SCORE)
+                    Q[ROW_a, ROW_b, COL, WIDTH ] = INA # Initial Neural Activity
+                    B[ROW_a, ROW_b, COL, WIDTH ] = DT # Discrimination Threshold
+                    EPS[ROW_a, ROW_b, COL, WIDTH ] = EPSILON_1 
+                    ACCURACY[ROW_a, ROW_b, COL, WIDTH ] = np.mean(ACC_TEMP)
+                    FSCORE[ROW_a, ROW_b, COL, WIDTH ] = np.mean(FSCORE_TEMP)
+                    print("Mean F1-Score for Q = ", Q[ROW_a, ROW_b, COL, WIDTH ],"B = ", B[ROW_a, ROW_b, COL, WIDTH ],"EPSILON = ", EPS[ROW_a, ROW_b, COL, WIDTH ]," is  = ",  np.mean(FSCORE_TEMP)  )
+        
     print("Saving Hyperparameter Tuning Results")
     
     
@@ -164,13 +167,14 @@ def k_cross_validation(FOLD_NO, traindata, trainlabel, testdata, testlabel, INIT
     B_MAX = []
     EPSILON_MAX = []
     
-    for ROW in range(0, len(DISCRIMINATION_THRESHOLD)):
-        for COL in range(0, len(INITIAL_NEURAL_ACTIVITY)):
-            for WID in range(0, len(EPSILON)):
-                if FSCORE[ROW, COL, WID] == MAX_FSCORE:
-                    Q_MAX.append(Q[ROW, COL, WID])
-                    B_MAX.append(B[ROW, COL, WID])
-                    EPSILON_MAX.append(EPS[ROW, COL, WID])
+    for ROW_a in range(0, len(D_alpha)):
+        for ROW_b in range(0, len(D_beta)):
+            for COL in range(0, len(INITIAL_NEURAL_ACTIVITY)):
+                for WID in range(0, len(EPSILON)):
+                    if FSCORE[ROW_a, ROW_b, COL, WID] == MAX_FSCORE:
+                        Q_MAX.append(Q[ROW_a, ROW_b, COL, WID])
+                        B_MAX.append(B[ROW_a, ROW_b, COL, WID])
+                        EPSILON_MAX.append(EPS[ROW_a, ROW_b, COL, WID])
     
     print("F1SCORE", FSCORE)
     print("BEST F1SCORE", MAX_FSCORE)

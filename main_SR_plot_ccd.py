@@ -9,9 +9,10 @@ DATA_NAME = "concentric_circle"
 traindata, trainlabel, testdata, testlabel = get_data(DATA_NAME)
 FOLD_NO = 5
 
-INITIAL_NEURAL_ACTIVITY = [0.21]
-DISCRIMINATION_THRESHOLD = [0.96]
-EPSILON = np.arange(0.001, 1.001, 0.001)
+INITIAL_NEURAL_ACTIVITY = np.arange(0.1, 1.1, 0.1)
+D_alpha = np.arange(0.1, 1.1, 0.1)
+D_beta = np.arange(0.1, 1.1, 0.1)
+EPSILON = np.arange(0.01, 1.01, 0.01)
 FSCORE, Q, B, EPS, EPSILON = k_cross_validation(FOLD_NO, traindata, trainlabel, testdata, testlabel, INITIAL_NEURAL_ACTIVITY, DISCRIMINATION_THRESHOLD, EPSILON, DATA_NAME)
 
 
