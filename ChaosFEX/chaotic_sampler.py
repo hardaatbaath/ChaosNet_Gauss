@@ -14,6 +14,7 @@ Dependencies: numpy, numba
 
 # Import calls
 import numpy as np
+import matplotlib.pyplot as plt
 from numba import vectorize, float64, njit
 from ChaosFEX.input_validator import _check_trajectory_inputs
 
@@ -72,6 +73,8 @@ def _iterate_gauss(alpha, beta, traj_vec):
 
         # Execute single step of iteration using previous value and threshold
         traj_vec[idx] = _gauss_onestep(traj_vec[idx - 1], alpha, beta)
+
+    print(traj_vec.shape)
 
     # Return populated array
     return traj_vec
@@ -162,4 +165,13 @@ def compute_trajectory(init_cond, alpha, beta, length, validate=False):
             # Else and return nothing
             return None
 
-    return _compute_trajectory(init_cond, alpha, beta, length)
+    traj_vector = _compute_trajectory(init_cond, alpha, beta, length)
+    #plot traj_vector
+    # plt.plot(traj_vector) 
+    # plt.xlabel('Index') 
+    # plt.ylabel('Value') 
+    # plt.title('Trajectory Vector Plot') 
+    # plt.grid(True) 
+    # plt.show()
+
+    return traj_vector

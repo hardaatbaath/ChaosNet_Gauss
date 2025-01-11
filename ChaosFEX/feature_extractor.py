@@ -268,6 +268,7 @@ def transform(feat_mat, initial_cond, trajectory_len, epsilon, alpha, beta):
 
     # Reshape 3D matrix to 2D with M x (N*4) dimensions and return
     out = out.transpose([0, 2, 1]).reshape([dimx, dimy * 4])
+    print(np.max(out[:,4:6]))
     return out
 
 
